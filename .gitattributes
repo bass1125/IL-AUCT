@@ -1,0 +1,20 @@
+# 默认自动处理换行
+* text=auto
+
+# ---- 批处理 / PowerShell 必须保持 CRLF ----
+# cmd.exe 解析 LF 换行的 .bat 会吃掉行首字符（if errorlevel -> orlevel），务必锁死
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# ---- 二进制文件，禁止任何转换 ----
+*.exe binary
+*.ico binary
+*.png binary
+*.jpg binary
+*.psd binary
+*.zip binary
+
+# ---- 语言统计 ----
+*.py linguist-language=Python
+*.js linguist-language=JavaScript
