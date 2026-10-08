@@ -1,0 +1,113 @@
+校园网自动登录 —— 使用说明
+================================================
+
+【它是什么】
+基于开源项目 campusnet，针对你学校的华为 Portal（webauth.do）定制的自动认证工具。
+开机自动登录、断网自动重连、后台静默运行，以后不用再手动点浏览器登录。
+
+【已经配好了什么】
+  · 账号        26370217900251
+  · 认证方式    华为 Portal（webauth.do）
+  · 开机自启    已装（「启动」文件夹里的 校园网自动登录.vbs）
+  · 配置文件    C:\Users\bass\AppData\Roaming\campusnet\config.json
+  · 运行日志    C:\Users\bass\AppData\Roaming\campusnet\watch.log
+
+【平时怎么用】
+什么都不用做。开机后它自己在后台把网连好，连不上会自动重试。
+
+想手动操作：双击本文件夹里的 campusnet.cmd，然后按提示敲：
+
+    campusnet.cmd status                     看现在连没连上
+    campusnet.cmd doctor                     体检，查「为什么没自动登录」
+    campusnet.cmd login                      手动登录一次
+    campusnet.cmd login --force --verbose    强制重登，并打印详细请求日志
+
+【出问题先做这两步】
+  1. 双击 campusnet.cmd，敲 doctor，它会逐项告诉你是哪一环断了；
+  2. 还是不行就看日志：C:\Users\bass\AppData\Roaming\campusnet\watch.log
+
+常见情况：学校改了登录页地址 → 删掉 config.json 里 options.portal_page 那一行，
+工具会自动去网关重新抓（这条路径也测过，能自己找到）。
+
+【怎么关掉自启 / 怎么卸载】
+  关自启：Win+R 输入 shell:startup 回车，删掉里面的「校园网自动登录.vbs」。
+  彻底卸载：上面那步做完，再把 D:\i_Lian\campusnet-autologin 整个文件夹删掉即可。
+  （config.json 里存着明文密码，介意的话删掉
+    C:\Users\bass\AppData\Roaming\campusnet 这个文件夹。）
+
+【这个文件夹里有什么】
+  campusnet\                     主程序（开源项目 + 新增的华为 Portal 支持）
+  campusnet.cmd                  命令行入口（status / doctor / login / watch）
+  start-campusnet.vbs            开机启动脚本（无窗口，调下面那个 cmd）
+  run-campusnet.cmd              真正干活的启动器，日志写进 watch.log
+  e2e_huawei_portal_test.py      认证流程测试，48 项断言，改过代码就跑一遍
+  real_probe.py                  只读探测门户页面结构，排障用（不会提交登录）
+  旧启动脚本_有问题.vbs.bak      已废弃，留着做对照，可以删
+
+【关于开机弹「Windows Script Host」报错（已修复）】
+如果你第一次重启看到过这个弹窗：
+    脚本: ...\Startup\校园网自动登录.vbs
+    行: 17   错误: 文件名、目录名或卷标语法不正确。   代码: 8007007B
+那是个编码坑，跟你的账号、网络都无关，现在已修好。
+
+原因：旧脚本里写了中文注释，存成了 UTF-8 + LF 换行；而 Windows 脚本宿主
+按系统的 GBK 代码页去读它，中文的 3 字节序列被错位吞并，连换行符都被吃掉，
+于是脚本的「行」整个错位 —— 报的第 17 行完全是假的，真实错误在别处。
+
+修法：启动脚本全部改成纯 ASCII 内容 + CRLF 换行。
+这样在 GBK 和 UTF-8 下字节完全一致，怎么读都不会错。
+
+顺带说明：那次重启「确实连上了」并不是这个脚本的功劳 —— 它的日志
+watch.log 当时根本没生成过，说明进程压根没起来。真正的自动连上是
+Windows 自动重连 WiFi + 学校的免感知认证。这个脚本现在才是真的在跑。
+
+【顺手修掉的第二个坑：每轮白等 25 秒】
+守护进程每轮动手前会先「等无线网卡就绪」。在你这台机器上这一步一直判定失败，
+于是每轮都干等满 25 秒才继续。根子还是编码：
+
+  这台机器上的 Python 跑在 UTF-8 模式下，用它去读 netsh 的中文输出（GBK），
+  中文全被解成乱码 → 工具认不出「名称」这个字段 → 以为网卡还没起来。
+  （SSID 是英文，所以没受影响 —— 这正是它"看着正常"却慢的原因。）
+
+已改成按 Windows 控制台编码（OEM/936）显式解码。
+实测：修复前每次等待 25.00 秒，修复后 0.08 秒。
+
+两个修改都跑过完整回归：项目自带测试 277 项通过，华为 Portal 流程测试 48 项通过。
+
+【技术说明（感兴趣再看）】
+你学校的认证是 华为 Portal，流程是：
+
+  1. 未认证时网关把请求 302 到
+     http://1.1.1.1:8888/webauth.do?wlanacip=..&wlanacname=TPsdcmc&wlanuserip=..&mac=..&vlan=..
+  2. 那个页面是一张隐藏表单，账号密码框字段名是 userId / passwd
+  3. 填好后 POST 到 /webauth.do;<JSESSIONID>?<网关参数>
+     —— 会话号在 URL 里也同时是 Cookie，两个都得带上
+
+三个容易踩的坑（都处理了）：
+  · 账号密码必须「覆盖」进原字段，追加会变成两个同名参数，门户只认第一个（空值）
+  · 会话号必须带，否则服务端当你是个新会话，把登录页原样吐回来
+  · 同一个账号只能一台设备在线，第一次提交可能只是把别的设备顶下线，
+    本机要再提交一次才真正上线（工具会自动补这一次）
+
+已实测验证：真实门户返回「此IP已在线请勿重复认证」——
+说明请求被服务器完整解析了，账号密码与会话都到位，只是当时本来就在线。
+
+【关于「自启」显示未安装】
+跑 campusnet.cmd status 时它可能显示「自启：未安装」，这是正常的，不用管。
+自启走的是「启动」文件夹里的 校园网自动登录.vbs（比计划任务/注册表更不容易
+被 Windows Defender 误判删除，而且能留下日志）。
+判断自启到底装没装，看这个文件在不在：
+  C:\Users\bass\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup\校园网自动登录.vbs
+
+想立刻试一次而不用重启：双击 D:\i_Lian\campusnet-autologin\start-campusnet.vbs，
+然后断开再连一次校园网，看它能不能自己把网接回来。
+
+（日志每次开机轮转：旧的 watch.log 会被改名成 watch.log.old，最多留两份，
+  不用手动清理。）
+
+【关于 WiFi 自动切回】
+配置里已经填了校园 WiFi 名 Sdcmc-Stu。作用：万一开机时抢先连上了手机热点，
+它会把 WiFi 切回 Sdcmc-Stu 再认证。
+还有一条「治本」的可选操作（会让其它 WiFi 不再自动连接，按需使用）：
+    campusnet.cmd wifi autoconnect
+

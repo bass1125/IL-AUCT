@@ -1,0 +1,42 @@
+# ---------- Python ----------
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+build/
+dist/
+venv/
+.venv/
+
+# ---------- 打包产物 ----------
+# exe 用 GitHub Release 分发，不进仓库
+*.exe
+*.spec.bak
+
+# ---------- 设计源文件 ----------
+*.psd
+*.ai
+
+# ---------- 运行时 / 隐私 ----------
+# 校园网账号密码存在 %APPDATA%\campusnet\，这里再兜一层
+config.json
+watch.log
+*.log
+
+# ---------- 备份 / 临时 ----------
+*.bak
+*.old
+*.tmp
+~$*
+
+# ---------- 编辑器 / 系统 ----------
+.vscode/
+.idea/
+*.swp
+Thumbs.db
+desktop.ini
+.DS_Store

@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>IL AUCT</title>
+<link rel="icon" href="favicon.ico">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="app">
+
+  <!-- ==================== 标题栏 ==================== -->
+  <header id="titlebar">
+    <div class="tb-left">
+      <div class="tb-logo">
+        <img src="logo.png" alt="">
+      </div>
+      <span class="tb-title">IL AUCT</span>
+      <span class="tb-ver" id="tb-ver"></span>
+    </div>
+
+    <div class="tb-right">
+      <div class="tb-stat">
+        <span class="tb-dot" id="tb-dot"></span>
+        <span id="tb-status-text">检测中</span>
+      </div>
+      <div class="tb-sep"></div>
+      <div class="tb-stat tb-muted" id="tb-uptime">已运行 --</div>
+      <div class="tb-sep"></div>
+      <div class="tb-stat tb-muted" id="tb-clock">--:--</div>
+    </div>
+  </header>
+
+  <!-- ==================== 主体 ==================== -->
+  <div id="main">
+
+    <!-- ---------- 侧边栏 ---------- -->
+    <nav id="sidebar">
+      <div class="nav-group">
+        <div class="nav-label">连接</div>
+        <button class="nav-item active" data-page="home">
+          <svg class="ni" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+            <path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/>
+            <path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><circle cx="12" cy="20" r="1" fill="currentColor" stroke="none"/>
+          </svg>
+          <span>连接状态</span>
+        </button>
+        <button class="nav-item" data-page="logs">
+          <svg class="ni" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+            <path d="M4 5h16M4 10h16M4 15h10M4 20h7"/>
+          </svg>
+          <span>运行日志</span>
+          <em class="badge" id="log-badge">0</em>
+        </button>
+      </div>
+
+      <div class="nav-group">
+        <div class="nav-label">账号</div>
+        <button class="nav-item" data-page="account">
+          <svg class="ni" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+            <rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M8 10h8M8 14h5"/>
+          </svg>
+          <span>账号与自启</span>
+        </button>
+      </div>
+
+      <div class="nav-group">
+        <div class="nav-label">其他</div>
+        <button class="nav-item" data-page="about">
+          <svg class="ni" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+            <circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>
+          </svg>
+          <span>关于</span>
+        </button>
+      </div>
+
+      <div class="sidebar-foot">
+        <button class="icon-btn" id="btn-data-dir" title="打开数据目录">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+            <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+          </svg>
+        </button>
+        <button class="icon-btn" id="btn-log-dir" title="打开日志目录">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+            <path d="M14 3v5h5"/><path d="M15 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/>
+          </svg>
+        </button>
+      </div>
+    </nav>
+
+    <!-- ---------- 内容区 ---------- -->
+    <section id="content">
+
+      <!-- 页面：连接状态 -->
+      <div class="page active" id="page-home">
+        <div class="page-head">
+          <h1>连接状态</h1>
+          <p>开机自动登录校园网，掉线自动重连</p>
+        </div>
+
+        <div class="card status-card" id="status-card">
+          <div class="status-ring" id="status-ring">
+            <svg viewBox="0 0 120 120">
+              <circle class="ring-track" cx="60" cy="60" r="52"/>
+              <circle class="ring-bar" id="ring-bar" cx="60" cy="60" r="52"/>
+            </svg>
+            <div class="ring-center">
+              <svg class="ring-icon" id="ring-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round">
+                <path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/>
+                <path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><circle cx="12" cy="20" r="1" fill="currentColor" stroke="none"/>
+              </svg>
+              <div class="ring-text" id="ring-text">检测中</div>
+            </div>
+          </div>
+
+          <div class="status-info">
+            <div class="status-headline" id="status-headline">正在检查网络…</div>
+            <div class="status-sub" id="status-sub">请稍候</div>
+
+            <div class="kv-grid">
+              <div class="kv">
+                <div class="kv-k">校园 Wi-Fi</div>
+                <div class="kv-v" id="kv-ssid">—</div>
+              </div>
+              <div class="kv">
+                <div class="kv-k">本机 IP</div>
+                <div class="kv-v" id="kv-ip">—</div>
+              </div>
+              <div class="kv">
+                <div class="kv-k">认证服务器</div>
+                <div class="kv-v" id="kv-server">—</div>
+              </div>
+              <div class="kv">
+                <div class="kv-k">上次操作</div>
+                <div class="kv-v" id="kv-last">—</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="status-actions">
+            <button class="btn btn-primary" id="btn-connect">
+              <svg class="bi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                <path d="M5 12h13M13 6l6 6-6 6"/>
+              </svg>
+              <span id="btn-connect-text">立即连接</span>
+            </button>
+            <button class="btn btn-ghost" id="btn-refresh">
+              <svg class="bi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                <path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 4v5h-5"/>
+              </svg>
+              重新检测
+            </button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head">
+            <span class="card-title">最近活动</span>
+            <button class="link-btn" data-goto="logs">查看全部</button>
+          </div>
+          <div class="mini-log" id="mini-log">
+            <div class="mini-empty">暂无记录</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 页面：运行日志 -->
+      <div class="page" id="page-logs">
+        <div class="page-head">
+          <h1>运行日志</h1>
+          <p>后台每次检查、每次登录的记录</p>
+        </div>
+        <div class="card card-flush">
+          <div class="card-head">
+            <span class="card-title">最近 <span id="log-count">0</span> 条</span>
+            <div class="head-actions">
+              <button class="btn btn-sm btn-ghost" id="btn-log-refresh">刷新</button>
+              <button class="btn btn-sm btn-ghost" id="btn-log-file">打开日志文件</button>
+            </div>
+          </div>
+          <pre class="log-view" id="log-view">加载中…</pre>
+        </div>
+      </div>
+
+      <!-- 页面：账号与自启 -->
+      <div class="page" id="page-account">
+        <div class="page-head">
+          <h1>账号与自启</h1>
+          <p>填好账号密码 → 保存 → 这个窗口就可以关掉了。以后开机后台自动登录，不会再弹出来。</p>
+        </div>
+
+        <div class="card">
+          <div class="card-head"><span class="card-title">登录账号</span></div>
+          <div class="form">
+            <label class="field">
+              <span class="field-label">用户名 / 学号</span>
+              <input type="text" id="in-user" class="input" placeholder="请输入校园网账号" autocomplete="off" spellcheck="false">
+            </label>
+            <label class="field">
+              <span class="field-label">密码</span>
+              <div class="input-wrap">
+                <input type="password" id="in-pass" class="input" placeholder="请输入密码" autocomplete="off">
+                <button class="eye" id="btn-eye" type="button" title="显示 / 隐藏">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+                    <path d="M1.5 12S5 5.5 12 5.5S22.5 12 22.5 12S19 18.5 12 18.5S1.5 12 1.5 12z"/>
+                    <circle cx="12" cy="12" r="3"/>
+                  </svg>
+                </button>
+              </div>
+            </label>
+            <label class="field">
+              <span class="field-label">校园 Wi-Fi 名（可选）</span>
+              <input type="text" id="in-ssid" class="input" placeholder="例如 Sdcmc-Stu；留空则只做认证、不自动切换" autocomplete="off" spellcheck="false">
+            </label>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head"><span class="card-title">启动选项</span></div>
+          <div class="form">
+            <label class="switch-row">
+              <span class="switch-text">
+                <b>记住我</b>
+                <em>把账号密码保存在本机，下次打开自动填好</em>
+              </span>
+              <span class="switch"><input type="checkbox" id="ck-remember"><i></i></span>
+            </label>
+            <label class="switch-row">
+              <span class="switch-text">
+                <b>开机自动连接</b>
+                <em>开机后由后台静默守护登录校园网；本软件窗口不会跟着开机弹出</em>
+              </span>
+              <span class="switch"><input type="checkbox" id="ck-autostart"><i></i></span>
+            </label>
+            <label class="switch-row">
+              <span class="switch-text">
+                <b>开机加速</b>
+                <em>让守护在登录瞬间就启动，不再排在桌面之后（能早十几秒通网）。开启时会弹一次管理员授权窗</em>
+              </span>
+              <span class="switch"><input type="checkbox" id="ck-fastboot"><i></i></span>
+            </label>
+            <label class="switch-row">
+              <span class="switch-text">
+                <b>关掉系统弹出的登录页</b>
+                <em>Windows 检测到校园网需要认证时会自己弹一张登录页；本程序登录好后顺手把它关掉</em>
+              </span>
+              <span class="switch"><input type="checkbox" id="ck-popup"><i></i></span>
+            </label>
+            <div class="hint" id="autostart-hint"></div>
+          </div>
+        </div>
+
+        <div class="form-actions">
+          <button class="btn btn-primary" id="btn-save">
+            <svg class="bi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <path d="M5 13l4 4L19 7"/>
+            </svg>
+            保存并应用
+          </button>
+          <button class="btn btn-ghost" id="btn-test">测试登录</button>
+        </div>
+
+        <div class="card note-card">
+          <div class="card-head"><span class="card-title">说明</span></div>
+          <ul class="notes">
+            <li>密码保存在本机 <code id="path-cfg">config.json</code>，不会上传到任何地方。</li>
+            <li>「开机自动连接」写进系统启动项（注册表 Run）。开机拉起的是<b>无界面的后台守护进程</b>，不是这个窗口 —— 想关掉随时取消勾选并保存。</li>
+            <li>「开机加速」会在系统里多建一个<b>「登录时」计划任务</b>，让守护在登录瞬间就启动 —— 比系统启动项早十几秒。开启和关闭都要管理员权限，所以会弹一次授权窗；取消勾选保存即移除。</li>
+            <li>设置完可以直接关掉窗口，后台照常运行；哪天想改账号或换 Wi-Fi，再打开它就回来了。</li>
+            <li>「校园 Wi-Fi 名」填了以后，开机若是先连上了别的网络，会自动切回校园网；留空则只做认证、不切网。</li>
+            <li>如果不想保存密码，取消「记住我」即可 —— 但这样开机就没法自动登录了。</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- 页面：关于 -->
+      <div class="page" id="page-about">
+        <div class="page-head">
+          <h1>关于</h1>
+          <p>校园网自动登录工具</p>
+        </div>
+
+        <div class="card">
+          <div class="card-head"><span class="card-title">运行状态</span></div>
+          <div class="kv-grid kv-grid-2">
+            <div class="kv"><div class="kv-k">版本</div><div class="kv-v" id="ab-ver">—</div></div>
+            <div class="kv"><div class="kv-k">认证方式</div><div class="kv-v" id="ab-provider">—</div></div>
+            <div class="kv"><div class="kv-k">配置目录</div><div class="kv-v mono" id="ab-cfgdir">—</div></div>
+            <div class="kv"><div class="kv-k">日志文件</div><div class="kv-v mono" id="ab-logfile">—</div></div>
+          </div>
+          <div class="head-actions" style="margin-top:14px">
+            <button class="btn btn-sm btn-ghost" id="btn-open-cfgdir">打开配置目录</button>
+            <button class="btn btn-sm btn-ghost" id="btn-open-logfile">打开日志文件</button>
+            <button class="btn btn-sm btn-ghost" id="btn-open-dir">打开配置文件夹</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head"><span class="card-title">它做了什么</span></div>
+          <ul class="notes">
+            <li>用你填的账号密码，走学校门户的认证接口登录，全程在后台完成。</li>
+            <li>每 3 分钟检查一次网络；掉线了自动重连，被切到别的 Wi-Fi 也会自己切回校园网。</li>
+            <li>开机后 3 分钟是「热身期」：立刻试第一次，之后每 5 秒一次，所以在刚开机那几十秒里连得比较积极。</li>
+            <li>开机自启的是<b>后台静默守护</b>，不是这个窗口 —— 这个窗口只在你手动打开时才出现。</li>
+          </ul>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ---------- 右侧面板：账号与自启（常驻） ---------- -->
+    <aside id="panel">
+      <div class="panel-head">
+        <span class="panel-title">账号与自启</span>
+        <span class="pill" id="pill-state">未保存</span>
+      </div>
+
+      <div class="panel-scroll">
+        <div class="panel-group">
+          <div class="panel-group-title">登录账号</div>
+          <label class="field">
+            <span class="field-label">用户名 / 学号</span>
+            <input type="text" id="p-user" class="input" placeholder="校园网账号" autocomplete="off" spellcheck="false">
+          </label>
+          <label class="field">
+            <span class="field-label">密码</span>
+            <div class="input-wrap">
+              <input type="password" id="p-pass" class="input" placeholder="密码" autocomplete="off">
+              <button class="eye" id="p-eye" type="button" title="显示 / 隐藏">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+                  <path d="M1.5 12S5 5.5 12 5.5S22.5 12 22.5 12S19 18.5 12 18.5S1.5 12 1.5 12z"/>
+                  <circle cx="12" cy="12" r="3"/>
+                </svg>
+              </button>
+            </div>
+          </label>
+          <label class="field">
+            <span class="field-label">校园 Wi-Fi 名（可选）</span>
+            <input type="text" id="p-ssid" class="input" placeholder="例如 Sdcmc-Stu" autocomplete="off" spellcheck="false">
+          </label>
+        </div>
+
+        <div class="panel-group">
+          <div class="panel-group-title">启动选项</div>
+          <label class="switch-row">
+            <span class="switch-text"><b>记住我</b></span>
+            <span class="switch"><input type="checkbox" id="p-remember"><i></i></span>
+          </label>
+          <label class="switch-row">
+            <span class="switch-text">
+              <b>开机自动连接</b>
+              <em>只启动后台守护，本窗口不会随开机弹出</em>
+            </span>
+            <span class="switch"><input type="checkbox" id="p-autostart"><i></i></span>
+          </label>
+          <label class="switch-row">
+            <span class="switch-text">
+              <b>开机加速</b>
+              <em>登录瞬间就启动守护，会弹一次管理员授权窗</em>
+            </span>
+            <span class="switch"><input type="checkbox" id="p-fastboot"><i></i></span>
+          </label>
+          <label class="switch-row">
+            <span class="switch-text">
+              <b>关掉系统弹出的登录页</b>
+              <em>系统自己弹的那张登录页，登录好后顺手关掉</em>
+            </span>
+            <span class="switch"><input type="checkbox" id="p-popup"><i></i></span>
+          </label>
+          <div class="hint" id="p-hint"></div>
+        </div>
+      </div>
+
+      <div class="panel-foot">
+        <div class="panel-note" id="panel-note">填好后点保存</div>
+        <button class="btn btn-primary btn-block" id="p-save">保存并应用</button>
+        <button class="btn btn-ghost btn-block" id="p-connect">立即连接一次</button>
+      </div>
+    </aside>
+  </div>
+
+  <!-- ==================== 状态栏 ==================== -->
+  <footer id="statusbar">
+    <div class="sb-left">
+      <span class="sb-item" id="sb-state">就绪</span>
+    </div>
+    <div class="sb-right">
+      <span class="sb-item" id="sb-watch">守护：未运行</span>
+      <span class="sb-sep"></span>
+      <span class="sb-item" id="sb-time">--:--:--</span>
+    </div>
+  </footer>
+</div>
+
+<div id="toast-wrap"></div>
+<script src="app.js"></script>
+</body>
+</html>
