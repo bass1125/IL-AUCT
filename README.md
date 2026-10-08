@@ -22,7 +22,7 @@
 
 ## 快速开始
 
-1. 到 [Releases](https://github.com/MiaoBoss/IL-AUCT/releases) 下载最新的 `IL AUCT.exe`
+1. 到 [Releases](https://github.com/bass1125/IL-AUCT/releases) 下载最新的 `IL AUCT.exe`
 2. 放到一个**固定不动**的目录（比如 `D:\i_Lian\CampusNetAssistant\`）
 3. 双击运行，填入你的校园网账号密码
 4. 勾上「开机自动连接」，保存
@@ -55,7 +55,7 @@ Windows 会把注册表启动项排在「桌面已经出来」之后才处理，
 需要 Python 3.8+，无第三方依赖。
 
 ```bash
-git clone https://github.com/MiaoBoss/IL-AUCT.git
+git clone https://github.com/bass1125/IL-AUCT.git
 cd IL-AUCT/CampusNetAssistant
 python app.py
 ```

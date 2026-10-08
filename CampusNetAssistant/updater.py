@@ -24,7 +24,7 @@ import urllib.request
 
 # ---------------------------------------------------------------- 配置
 #: 仓库坐标。换仓库时只改这两行。
-OWNER = "MiaoBoss"
+OWNER = "bass1125"
 REPO = "IL-AUCT"
 
 _API = "https://api.github.com"
