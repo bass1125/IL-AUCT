@@ -15,6 +15,8 @@ venv/
 # ---------- 打包产物 ----------
 # exe 用 GitHub Release 分发，不进仓库
 *.exe
+# 换版本时留下的旧 exe（形如 IL AUCT.exe.old-20261008）
+*.exe.old*
 *.spec.bak
 
 # ---------- 设计源文件 ----------
