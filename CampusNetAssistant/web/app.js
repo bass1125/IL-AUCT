@@ -148,8 +148,89 @@ function render() {
   $('ab-logfile').textContent = ST.log_file || '—';
   $('path-cfg').textContent = ST.cfg_file || 'config.json';
 
+  renderUpdate();
   renderMiniLog();
   checkAutostartHint();
+}
+
+/* ------------------------------------------------ 软件更新 */
+let UPDATE_TOASTED = '';   // 记下提示过的版本号，免得每 6 秒弹一次
+
+function fmtMB(bytes) {
+  return (Number(bytes || 0) / 1048576).toFixed(1);
+}
+
+function renderUpdate() {
+  const up = ST.update || {};
+  const current = up.current || ST.version || '';
+  const latest = up.latest || '';
+  const hasNew = !!up.available;
+
+  $('up-current').textContent = current ? 'v' + current : '—';
+  $('up-latest').textContent = latest
+    ? 'v' + latest
+    : (up.checked ? '已是最新' : '—');
+
+  $('up-pill').style.display = hasNew ? '' : 'none';
+
+  const notes = $('up-body');
+  if (hasNew && up.notes) {
+    notes.style.display = '';
+    notes.textContent = up.notes;
+  } else {
+    notes.style.display = 'none';
+  }
+
+  // 进度条：只有下载中或已下载才露面
+  const bar = $('up-bar');
+  const active = up.downloading || up.downloaded;
+  bar.style.display = active ? '' : 'none';
+  bar.classList.toggle('done', !!up.downloaded);
+  if (active) {
+    const total = Number(up.progress_total || 0);
+    const done = Number(up.progress || 0);
+    const pct = up.downloaded ? 100 : (total ? Math.min(100, (done / total) * 100) : 0);
+    $('up-fill').style.width = pct.toFixed(1) + '%';
+  }
+
+  // 下面那行说明文字
+  const note = $('up-note');
+  let text = '';
+  if (up.downloading) {
+    text = '正在下载 v' + latest + '… ' + fmtMB(up.progress) + ' / '
+         + (up.progress_total ? fmtMB(up.progress_total) : '?') + ' MB';
+  } else if (up.downloaded) {
+    text = 'v' + latest + ' 已下载完成，点「重启并完成更新」生效';
+  } else if (up.download_error) {
+    text = up.download_error;
+  } else if (up.checked && hasNew) {
+    text = '发现新版本 v' + latest
+         + (up.size ? '（' + fmtMB(up.size) + ' MB）' : '');
+  } else if (up.checked && up.ok) {
+    text = '已是最新版本';
+  } else if (up.checked && up.error) {
+    text = up.error;
+  }
+  note.textContent = text;
+  note.className = 'hint';
+
+  // 按钮
+  const btn = $('btn-do-update');
+  if (up.downloaded) {
+    btn.style.display = ''; btn.disabled = false; btn.textContent = '重启并完成更新';
+  } else if (up.downloading) {
+    btn.style.display = ''; btn.disabled = true; btn.textContent = '下载中…';
+  } else if (hasNew) {
+    btn.style.display = ''; btn.disabled = false; btn.textContent = '立即更新';
+  } else {
+    btn.style.display = 'none';
+  }
+
+  // 第一次发现有新版本，提示一声
+  if (hasNew && latest && UPDATE_TOASTED !== latest) {
+    UPDATE_TOASTED = latest;
+    toast('发现新版本 v' + latest + ' —— 去「关于」页点「立即更新」', 'ok', 6500);
+  }
 }
 
 function renderMiniLog() {
@@ -256,6 +337,67 @@ async function doSave() {
   await refresh();
 }
 
+/* ------------------------------------------------ 更新动作 */
+async function doCheckUpdate() {
+  const btn = $('btn-check-update');
+  btn.disabled = true; btn.textContent = '检查中…';
+  const r = await call('check_update');
+  btn.disabled = false; btn.textContent = '检查更新';
+  await refresh();
+  if (!r.ok) {
+    toast(r.error || '检查更新失败', 'err', 4600);
+  } else if (r.available) {
+    toast('发现新版本 v' + r.latest, 'ok', 4600);
+  } else {
+    toast('已是最新版本 v' + (r.current || ''), 'ok');
+  }
+}
+
+async function doUpdate() {
+  const up = ST.update || {};
+
+  // 已经下好了 —— 这一步会重启程序
+  if (up.downloaded) {
+    if (!confirm('软件将关闭以完成更新，之后会自动重新打开。\n现在继续吗？')) return;
+    toast('正在重启完成更新…');
+    await call('apply_update');
+    return;
+  }
+
+  const btn = $('btn-do-update');
+  btn.disabled = true; btn.textContent = '开始下载…';
+  const r = await call('download_update');
+  if (!r.ok) {
+    toast(r.message || '下载失败', 'err', 4600);
+    await refresh();
+    return;
+  }
+  toast('正在下载新版本，请稍候…', 'ok');
+  await pollDownload();
+}
+
+async function pollDownload() {
+  // 后端是后台线程在下载，这里每 0.7 秒问一次进度
+  for (let i = 0; i < 900; i++) {
+    await new Promise((res) => setTimeout(res, 700));
+    const p = await call('update_progress');
+    if (p && typeof p === 'object') {
+      ST.update = p;
+      renderUpdate();
+      if (!p.downloading) {
+        await refresh();
+        if (p.downloaded) {
+          toast('新版本已下载完成，点「重启并完成更新」生效', 'ok', 6000);
+        } else {
+          toast(p.download_error || '下载失败', 'err', 5200);
+        }
+        return;
+      }
+    }
+  }
+  toast('下载超时，请重试', 'warn', 4600);
+}
+
 /* ------------------------------------------------ 表单绑定 */
 function bindPair(a, b, evt) {
   const sync = (from, to) => {
@@ -318,6 +460,8 @@ function init() {
   $('p-save').addEventListener('click', doSave);
   $('btn-test').addEventListener('click', doConnect);
   $('btn-log-refresh').addEventListener('click', loadLog);
+  $('btn-check-update').addEventListener('click', doCheckUpdate);
+  $('btn-do-update').addEventListener('click', doUpdate);
   $('btn-log-file').addEventListener('click', () => call('open_log_file'));
   $('btn-data-dir').addEventListener('click', () => call('open_data_dir'));
   $('btn-log-dir').addEventListener('click', () => call('open_log_file'));

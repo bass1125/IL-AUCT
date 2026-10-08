@@ -45,6 +45,11 @@ def _base_dir() -> str:
 
 
 APP_TITLE = "IL AUCT"
+
+#: IL AUCT 自己的版本号 —— 跟底层 campusnet 的 ``__version__`` 是两回事。
+#: 发新 Release 时改这里，tag 用 ``v`` + 这个号（如 v1.0.1）。
+APP_VERSION = "1.0.0"
+
 WATCH_INTERVAL = 3          # 守护检查间隔（分钟）
 AUTOSTART_KEY = "campusnet"  # 注册表 Run 键下的值名（与上游一致）
 
@@ -66,6 +71,8 @@ from campusnet.config import Config, config_dir, default_config_path  # noqa: E4
 from campusnet.detector import check_online, detect  # noqa: E402
 from campusnet.runner import Runner  # noqa: E402
 from campusnet.session import Session, local_ip  # noqa: E402
+
+import updater  # noqa: E402
 
 LOG_DIR = config_dir()
 WATCH_LOG = os.path.join(LOG_DIR, "watch.log")
@@ -582,6 +589,14 @@ class Api:
         self.last_action = ""
         self._busy_lock = threading.Lock()
 
+        # 更新状态（守护线程在后台写，界面读，所以统一用一把锁护着）
+        self._update_lock = threading.Lock()
+        self.update = {"ok": False, "available": False, "current": APP_VERSION,
+                       "latest": "", "notes": "", "size": 0, "url": "",
+                       "page": "", "error": "", "checked": False}
+        self._download = {"running": False, "done": 0, "total": 0,
+                          "ok": None, "error": ""}
+
     # ---------------- 状态
     def get_state(self) -> dict:
         cfg = Config.load()
@@ -603,12 +618,13 @@ class Api:
             "fastboot": fastboot_installed(),
             "close_popup": popup.enabled(cfg.options),
             "watch_running": self.watcher.running(),
-            "version": __version__,
+            "version": APP_VERSION,
             "provider": cfg.provider or "auto",
             "cfg_dir": config_dir(),
             "cfg_file": cfg.path or default_config_path(),
             "log_file": WATCH_LOG,
             "log_tail": log_tail(5),
+            "update": self._update_snapshot(),
         }
 
     @staticmethod
@@ -738,6 +754,122 @@ class Api:
                     os.path.basename(path)), "warn")
             except OSError:
                 pass
+
+    # ---------------- 更新
+    def _update_snapshot(self) -> dict:
+        with self._update_lock:
+            snap = dict(self.update)
+            dl = dict(self._download)
+        snap["downloading"] = bool(dl.get("running"))
+        snap["downloaded"] = bool(dl.get("ok"))
+        snap["progress"] = dl.get("done") or 0
+        snap["progress_total"] = dl.get("total") or 0
+        snap["download_error"] = dl.get("error") or ""
+        return snap
+
+    def check_update(self, silent: bool = False) -> dict:
+        """查有没有新版本。
+
+        ``silent=True`` 是开机后台自动跑的那次 —— 没问题就别往日志里写东西，
+        也别让界面弹提示，安安静静查完就行。
+        """
+        info = updater.check(APP_VERSION)
+        info["checked"] = True
+        with self._update_lock:
+            self.update = info
+            # 换了新版本信息，之前下的包就不作数了
+            if self._download.get("ok"):
+                self._download = {"running": False, "done": 0, "total": 0,
+                                  "ok": None, "error": ""}
+
+        if info.get("available"):
+            log("发现新版本 {}（当前 {}）".format(info["latest"], APP_VERSION), "ok")
+        elif not silent:
+            if info.get("ok"):
+                log("已是最新版本（{}）".format(APP_VERSION), "info")
+            else:
+                log("检查更新失败：{}".format(info.get("error") or "未知原因"), "warn")
+        return info
+
+    def download_update(self) -> dict:
+        """后台下载新版本，立即返回；进度靠 :meth:`update_progress` 轮询。"""
+        with self._update_lock:
+            if self._download.get("running"):
+                return {"ok": False, "message": "正在下载中，请稍候"}
+            info = dict(self.update)
+
+        if not info.get("available"):
+            return {"ok": False, "message": "当前没有可更新的版本"}
+        if not info.get("url"):
+            return {"ok": False, "message": "这个版本没有提供安装包"}
+
+        dest = updater.staged_path()
+        with self._update_lock:
+            self._download = {"running": True, "done": 0,
+                              "total": int(info.get("size") or 0),
+                              "ok": None, "error": ""}
+
+        def on_progress(done: int, total: int) -> None:
+            with self._update_lock:
+                self._download["done"] = done
+                if total:
+                    self._download["total"] = total
+
+        def worker() -> None:
+            ok, err = updater.download(info["url"], dest, on_progress)
+            with self._update_lock:
+                self._download["running"] = False
+                self._download["ok"] = ok
+                self._download["error"] = err
+                done = self._download["done"]
+            if ok:
+                log("新版本已下载完成（{:.1f} MB），点「立即更新」生效".format(
+                    done / 1048576.0), "ok")
+            else:
+                log("下载新版本失败：{}".format(err), "error")
+
+        threading.Thread(target=worker, daemon=True).start()
+        log("正在下载新版本 {}…".format(info.get("latest") or ""), "info")
+        return {"ok": True, "started": True}
+
+    def update_progress(self) -> dict:
+        return self._update_snapshot()
+
+    def apply_update(self) -> dict:
+        """停掉守护 → 起替换脚本 → 让本程序退出。
+
+        退出这一步必须的：Windows 上运行中的 exe 不能被覆盖，脚本要等我们
+        彻底消失才能动手。
+        """
+        if not _FROZEN:
+            return {"ok": False, "message": "开发模式请直接 git pull 更新"}
+
+        with self._update_lock:
+            finished = bool(self._download.get("ok"))
+        if not finished:
+            return {"ok": False, "message": "新版本还没下载好"}
+
+        new_exe = updater.staged_path()
+        if not os.path.exists(new_exe):
+            return {"ok": False, "message": "安装包不见了，请重新下载一次"}
+
+        # 守护进程也叫 IL AUCT.exe，不先叫停它，替换会一直重试到超时
+        try:
+            singleton.signal_stop()
+        except Exception:            # noqa: BLE001
+            pass
+        for _ in range(40):
+            if not self.watcher.running():
+                break
+            time.sleep(0.1)
+
+        script = updater.write_script(sys.executable, new_exe)
+        if not updater.launch(script):
+            return {"ok": False, "message": "启动更新程序失败，请手动下载新版本"}
+
+        log("正在退出以完成更新，稍后会自动重启…", "ok")
+        _Handler.quit_flag = True
+        return {"ok": True, "message": "更新即将开始，程序会自动重启"}
 
     # ---------------- 日志 / 目录
     def read_log(self, lines: int = 400) -> dict:
@@ -959,6 +1091,13 @@ def run_gui() -> int:
     # 放后台线程做：拉起并等它拿锁最多要 2 秒多，不能让窗口干等着不出来。
     threading.Thread(target=watcher.ensure_if_configured, daemon=True).start()
 
+    # 静默查一次有没有新版本 —— 有就在界面上提示，没有就算了。
+    # 放后台线程：网络慢的话不该拖着窗口不显示。
+    threading.Thread(target=api.check_update, kwargs={"silent": True},
+                     daemon=True).start()
+    # 清掉上一次更新留下的残渣（新版本已经替换上去、脚本也跑完了的情况）
+    threading.Thread(target=updater.cleanup, daemon=True).start()
+
     port = _free_port()
     _Handler.api = api
     _Handler.web_root = web_root
@@ -1085,6 +1224,26 @@ def _fallback(text: str) -> None:
         print(text)
 
 
+def _cmd_update_check(argv: list) -> int:
+    """查一次更新。
+
+    打包版是 --windowed，没有控制台，所以支持把结果写进文件：
+    ``IL AUCT.exe update-check D:\\out.json`` —— 排查「更新检查失败」时很方便。
+    """
+    info = updater.check(APP_VERSION)
+    text = json.dumps(info, ensure_ascii=False, indent=2)
+    target = argv[0] if argv else ""
+    if target:
+        try:
+            with open(target, "w", encoding="utf-8") as handle:
+                handle.write(text + "\n")
+        except OSError as exc:
+            print("写入失败：{}".format(exc))
+            return 1
+    print(text)
+    return 0
+
+
 def main() -> int:
     argv = list(sys.argv[1:])
 
@@ -1097,6 +1256,9 @@ def main() -> int:
             argv = ["watch", "--interval", str(WATCH_INTERVAL)]
         _redirect_std_to_log()
         return cli_main(argv)
+
+    if argv[0] in ("update-check", "check-update"):
+        return _cmd_update_check(argv[1:])
 
     return cli_main(argv)
 

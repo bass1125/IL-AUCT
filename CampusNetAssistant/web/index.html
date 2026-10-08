@@ -296,6 +296,24 @@
           </div>
         </div>
 
+        <div class="card" id="update-card">
+          <div class="card-head">
+            <span class="card-title">软件更新</span>
+            <span class="pill" id="up-pill" style="display:none">有新版本</span>
+          </div>
+          <div class="kv-grid kv-grid-2">
+            <div class="kv"><div class="kv-k">当前版本</div><div class="kv-v" id="up-current">—</div></div>
+            <div class="kv"><div class="kv-k">最新版本</div><div class="kv-v" id="up-latest">—</div></div>
+          </div>
+          <div class="hint" id="up-note"></div>
+          <pre class="up-notes" id="up-body" style="display:none"></pre>
+          <div class="up-bar" id="up-bar" style="display:none"><i id="up-fill"></i></div>
+          <div class="head-actions" style="margin-top:14px">
+            <button class="btn btn-sm btn-ghost" id="btn-check-update">检查更新</button>
+            <button class="btn btn-sm btn-primary" id="btn-do-update" style="display:none">立即更新</button>
+          </div>
+        </div>
+
         <div class="card">
           <div class="card-head"><span class="card-title">它做了什么</span></div>
           <ul class="notes">
