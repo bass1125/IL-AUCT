@@ -56,9 +56,9 @@ function row(mark, title, sub, side, sideClass, markClass) {
 function renderList(s) {
   const items = [];
 
-  items.push(row('', '后台守护进程',
-    '开机后自动登录校园网的那个后台程序',
-    s.watch_running ? '运行中' : '未运行',
+  items.push(row('', '后台抢网进程',
+    '开机后自动登录校园网的那个后台程序，连上就退出',
+    s.watch_running ? '正在抢网' : '已退出',
     s.watch_running ? 'on' : ''));
 
   if (s.autostart) {
@@ -205,7 +205,7 @@ async function doUninstall() {
   btn.textContent = '正在卸载…';
   $('tb-status').textContent = '卸载中…';
   $('foot').className = 'uni-foot';
-  $('foot').textContent = '正在停守护、清自启、删文件，请稍候…';
+  $('foot').textContent = '正在停后台抢网、清自启、删文件，请稍候…';
 
   let r;
   try {

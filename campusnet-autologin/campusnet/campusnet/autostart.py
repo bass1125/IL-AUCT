@@ -98,7 +98,12 @@ def _base_command(config_path: str, interval: int = 10) -> list:
         # 绝不能再带 ``-m campusnet`` —— 那是源码/python 环境的跑法，
         # 塞给 exe 会得到 argparse 的 "invalid choice"，而且无窗口进程里
         # stderr 是 None，报错都写不出去，直接弹崩溃对话框。
-        args = [sys.executable, "watch", "--interval", str(interval)]
+        args = [sys.executable, "watch"]
+        # interval <= 0 就不写这个参数。IL AUCT 用的是"开机抢网"模式
+        # （连上就退出），根本没有"每隔几分钟查一轮"这回事，
+        # 写个 --interval 进去只会让启动项看起来莫名其妙。
+        if interval > 0:
+            args += ["--interval", str(interval)]
     else:
         args = [_python_executable(), "-m", "campusnet", "watch",
                 "--interval", str(interval)]

@@ -48,9 +48,12 @@ APP_TITLE = "IL AUCT"
 
 #: IL AUCT 自己的版本号 —— 跟底层 campusnet 的 ``__version__`` 是两回事。
 #: 发新 Release 时改这里，tag 用 ``v`` + 这个号（如 v1.0.1）。
-APP_VERSION = "1.0.0"
+APP_VERSION = "1.1.0"
 
-WATCH_INTERVAL = 3          # 守护检查间隔（分钟）
+#: 开机抢网：在这段时间（秒）内密集尝试，连上就退出。
+GRAB_SECONDS = 180
+#: 抢网期间的尝试间隔（秒）。
+GRAB_GAP = 5
 AUTOSTART_KEY = "campusnet"  # 注册表 Run 键下的值名（与上游一致）
 
 
@@ -81,8 +84,8 @@ WATCH_LOG = os.path.join(LOG_DIR, "watch.log")
 # ---------------------------------------------------------------- 日志
 _LOG_LOCK = threading.Lock()
 
-#: debug 级日志（每个 HTTP 请求两行）默认不落盘 —— 守护每 3 分钟跑一轮，
-#: 一轮就写十来行"GET / 200"，纯粹是噪音。要排查时设 CN_ASSISTANT_DEBUG=1 开回来。
+#: debug 级日志（每个 HTTP 请求两行）默认不落盘 —— 抢网一轮要写十来行
+#: "GET / 200"，纯粹是噪音。要排查时设 CN_ASSISTANT_DEBUG=1 开回来。
 _VERBOSE_LOG = bool(os.environ.get("CN_ASSISTANT_DEBUG"))
 
 #: 单个日志文件的上限，超了就在下次启动时轮转
@@ -303,6 +306,97 @@ def _child_env() -> dict:
     return env
 
 
+def _ask_retry() -> bool:
+    """弹一个系统消息框问「要不要再来一轮」。返回 True 表示点了「是」。
+
+    直接调 Win32 的 ``MessageBoxW``：不引 tkinter（省打包体积），也不依赖
+    界面进程 —— 这个场景下界面根本没开。用户不理它就一直挂着，这不影响
+    别的：进程闲着而已，不占 CPU 也不动网络。
+    """
+    if os.name != "nt":
+        return False
+    try:
+        import ctypes
+        MB_YESNO = 0x04
+        MB_ICONWARNING = 0x30
+        MB_TOPMOST = 0x00040000
+        MB_SETFOREGROUND = 0x00010000
+        IDYES = 6
+        answer = ctypes.windll.user32.MessageBoxW(
+            None,
+            "已经试了 {} 秒，还是没能连上校园网。\n\n"
+            "常见原因：\n"
+            "· 无线网卡还没就绪，或者校园 Wi-Fi 信号不好\n"
+            "· Wi-Fi 开关 / 飞行模式被关掉了\n"
+            "· 账号密码不对（打开软件检查一下）\n\n"
+            "要再试一轮吗？".format(GRAB_SECONDS),
+            "IL AUCT —— 还没连上网络",
+            MB_YESNO | MB_ICONWARNING | MB_TOPMOST | MB_SETFOREGROUND)
+        return answer == IDYES
+    except Exception:               # noqa: BLE001
+        return False
+
+
+def _cmd_watch(extra=None) -> int:
+    """开机抢网。
+
+    登录时由计划任务 / 启动项拉起，在 ``GRAB_SECONDS`` 秒内每 ``GRAB_GAP``
+    秒试一轮（连 Wi-Fi + 探测 + Portal 认证），**连上就退出**。
+
+    为什么不再常驻：这个进程的职责就一件事 —— 保证开机有网。连上之后的
+    掉线、合盖唤醒掉认证，一概不管（想要就再开一次软件）。这么改之后，
+    开机连上那一刻内存就直接归零，后台不再有任何常驻动作。
+
+    超过 ``GRAB_SECONDS`` 还没连上就弹个框问要不要再来一轮 —— 既不会
+    默默放弃，也不会无限期在后台空转。
+    """
+    from campusnet import singleton
+    from campusnet.config import Config
+    from campusnet.runner import Runner
+
+    extra = list(extra or [])
+    cfg_path = ""
+    if "--config" in extra:
+        index = extra.index("--config")
+        if index + 1 < len(extra):
+            cfg_path = extra[index + 1]
+
+    # 单实例锁：已经有一个在抢网就别插一脚，两个一起动只会互相抢网卡
+    if not singleton.acquire():
+        log("已有一个抢网进程在跑，本次启动退出", "info")
+        return 0
+
+    try:
+        cfg = Config.load(cfg_path or default_config_path())
+    except Exception as exc:        # noqa: BLE001
+        log("读配置失败：{}".format(exc), "error")
+        return 1
+
+    if not cfg.username:
+        log("还没填上网账号，抢网无从下手，退出", "warn")
+        return 0
+
+    runner = Runner(cfg, logger=log)
+    if singleton.hold_stop_event():
+        runner.stopper = singleton.wait_stop
+
+    round_no = 0
+    while True:
+        round_no += 1
+        if round_no > 1:
+            log("第 {} 轮抢网开始".format(round_no), "info")
+        if runner.grab_online(GRAB_SECONDS, GRAB_GAP):
+            log("已联网，抢网任务完成，进程退出", "ok")
+            return 0
+        if runner.interrupted:
+            log("收到退出信号，抢网结束", "info")
+            return 0
+        log("{} 秒内没能连上".format(GRAB_SECONDS), "warn")
+        if not _ask_retry():
+            log("用户选择不再重试，抢网结束", "info")
+            return 0
+
+
 def _spawn_watch() -> bool:
     """在后台拉起一个无窗口的静默守护进程。
 
@@ -310,15 +404,14 @@ def _spawn_watch() -> bool:
     那就又回到"必须一直开着界面才有守护"的老路了。
     """
     if _FROZEN:
-        cmd = [sys.executable, "watch", "--interval", str(WATCH_INTERVAL)]
+        cmd = [sys.executable, "watch"]
     else:
         # 开发模式：用 pythonw.exe 跑，免得蹦出一个黑框
         python = sys.executable or "python"
         quiet = os.path.join(os.path.dirname(python), "pythonw.exe")
         if os.path.exists(quiet):
             python = quiet
-        cmd = [python, os.path.join(_HERE, "app.py"),
-               "watch", "--interval", str(WATCH_INTERVAL)]
+        cmd = [python, os.path.join(_HERE, "app.py"), "watch"]
 
     cfg_path = default_config_path()
     if cfg_path:
@@ -338,7 +431,7 @@ def _spawn_watch() -> bool:
     except Exception as exc:        # noqa: BLE001
         log("拉起后台守护失败：{}".format(exc), "error")
         return False
-    log("已在后台启动静默守护（关掉本窗口也不影响它）", "ok")
+    log("已在后台开始抢网（关掉本窗口也不影响它）", "ok")
     return True
 
 
@@ -359,7 +452,12 @@ class Watcher:
         return True
 
     def ensure_if_configured(self) -> None:
-        """只在用户开过「开机自动连接」时才保证后台有守护在跑。"""
+        """开过「开机自动连接」的话，顺手抢一次网。
+
+        开机那一刻由计划任务 / 启动项负责拉起，这里管的是"用户手动打开界面"
+        这种时候 —— 网络断了又不想重启，开一下软件就能补回来。抢网进程连上
+        就退出，所以本来就连着网时，它跑一轮就没了，不会赖在后台。
+        """
         try:
             if not autostart_enabled():
                 return
@@ -455,7 +553,7 @@ def _fastboot_script(enable: bool) -> str:
                 "exit 0\n").format(name=_ps_quote(FASTBOOT_TASK_NAME))
 
     cfg_path = Config.load().path or default_config_path()
-    arguments = 'watch --interval {} --config "{}"'.format(WATCH_INTERVAL, cfg_path)
+    arguments = 'watch --config "{}"'.format(cfg_path)
     return (
         "$ErrorActionPreference = 'Stop'\n"
         "$sid = ([Security.Principal.WindowsIdentity]::GetCurrent()).User.Value\n"
@@ -575,7 +673,7 @@ def _apply_fastboot(enable: bool) -> tuple:
     # 提权进程说成功还不够，回头看一眼任务到底在不在
     if fastboot_installed() != bool(enable):
         return False, "开机加速好像没生效，请再试一次"
-    return True, ("已开启开机加速：登录瞬间就启动守护，比系统启动项早十几秒"
+    return True, ("已开启开机加速：登录瞬间就启动抢网，比系统启动项早十几秒"
                   if enable else "已关闭开机加速，改回由系统启动项负责")
 
 
@@ -694,7 +792,9 @@ class Api:
             spawned = stopped = False
             if autostart_on:
                 self._clear_legacy_vbs()
-                notes.append(autostart.install(path, WATCH_INTERVAL))
+                # interval=0 → 启动项里不带 --interval：新逻辑是"抢一次网就退出"，
+                # 没有"每隔几分钟查一轮"这回事了
+                notes.append(autostart.install(path, interval=0))
                 # 开机自启负责"以后"，这里负责"现在" —— 不然用户设置完
                 # 关掉窗口，直到下次重启之前都没有东西在盯网络
                 spawned = self.watcher.ensure()
@@ -1086,8 +1186,8 @@ def run_gui() -> int:
     watcher = Watcher()
     api = Api(prober, watcher)
     prober.start()
-    # 用户之前开过「开机自动连接」的话，保证后台现在也有一份守护在跑
-    # （正常是从开机起就一直在跑；这里覆盖"守护挂过 / 手动关过"的情况）。
+    # 用户之前开过「开机自动连接」的话，顺手抢一次网 —— 覆盖"开机时没连上"
+    # 和"后来掉线了"这两种情况：开一下界面就能补回来。
     # 放后台线程做：拉起并等它拿锁最多要 2 秒多，不能让窗口干等着不出来。
     threading.Thread(target=watcher.ensure_if_configured, daemon=True).start()
 
@@ -1252,10 +1352,8 @@ def main() -> int:
 
     # 守护类命令把输出落到日志里（--windowed 的 exe 本来也看不到控制台）
     if argv[0] in ("watch", "silent", "--silent"):
-        if argv[0] in ("silent", "--silent"):
-            argv = ["watch", "--interval", str(WATCH_INTERVAL)]
         _redirect_std_to_log()
-        return cli_main(argv)
+        return _cmd_watch(argv[1:])
 
     if argv[0] in ("update-check", "check-update"):
         return _cmd_update_check(argv[1:])

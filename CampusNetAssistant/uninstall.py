@@ -354,17 +354,17 @@ def _stop_watch() -> dict:
 
     try:
         if not singleton.is_taken(WATCH_LOCK):
-            return _step("停止后台守护", True, "本来就没在运行")
+            return _step("停止后台抢网", True, "本来就没在运行")
         if not singleton.signal_stop():
-            return _step("停止后台守护", False, "停止信号没能发出去", "warn")
+            return _step("停止后台抢网", False, "停止信号没能发出去", "warn")
     except Exception as exc:         # noqa: BLE001
-        return _step("停止后台守护", False, "出错了：{}".format(exc), "warn")
+        return _step("停止后台抢网", False, "出错了：{}".format(exc), "warn")
 
     for _ in range(200):             # 最多等 20 秒
         if not singleton.is_taken(WATCH_LOCK):
-            return _step("停止后台守护", True, "已退出")
+            return _step("停止后台抢网", True, "已退出")
         time.sleep(0.1)
-    return _step("停止后台守护", True,
+    return _step("停止后台抢网", True,
                  "信号已送达，它正卡在一轮探测里，退干净还要几秒", "warn")
 
 

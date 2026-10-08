@@ -229,14 +229,14 @@
             <label class="switch-row">
               <span class="switch-text">
                 <b>开机自动连接</b>
-                <em>开机后由后台静默守护登录校园网；本软件窗口不会跟着开机弹出</em>
+                <em>开机后在后台自动登录校园网，连上就收工；本软件窗口不会跟着开机弹出</em>
               </span>
               <span class="switch"><input type="checkbox" id="ck-autostart"><i></i></span>
             </label>
             <label class="switch-row">
               <span class="switch-text">
                 <b>开机加速</b>
-                <em>让守护在登录瞬间就启动，不再排在桌面之后（能早十几秒通网）。开启时会弹一次管理员授权窗</em>
+                <em>让抢网进程在登录瞬间就启动，不再排在桌面之后（能早十几秒通网）。开启时会弹一次管理员授权窗</em>
               </span>
               <span class="switch"><input type="checkbox" id="ck-fastboot"><i></i></span>
             </label>
@@ -265,9 +265,9 @@
           <div class="card-head"><span class="card-title">说明</span></div>
           <ul class="notes">
             <li>密码保存在本机 <code id="path-cfg">config.json</code>，不会上传到任何地方。</li>
-            <li>「开机自动连接」写进系统启动项（注册表 Run）。开机拉起的是<b>无界面的后台守护进程</b>，不是这个窗口 —— 想关掉随时取消勾选并保存。</li>
-            <li>「开机加速」会在系统里多建一个<b>「登录时」计划任务</b>，让守护在登录瞬间就启动 —— 比系统启动项早十几秒。开启和关闭都要管理员权限，所以会弹一次授权窗；取消勾选保存即移除。</li>
-            <li>设置完可以直接关掉窗口，后台照常运行；哪天想改账号或换 Wi-Fi，再打开它就回来了。</li>
+            <li>「开机自动连接」写进系统启动项（注册表 Run）。开机拉起的是<b>无界面的后台抢网进程</b> —— 它把网弄通就退出，不在后台常驻。想关掉随时取消勾选并保存。</li>
+            <li>「开机加速」会在系统里多建一个<b>「登录时」计划任务</b>，让抢网进程在登录瞬间就启动 —— 比系统启动项早十几秒。开启和关闭都要管理员权限，所以会弹一次授权窗；取消勾选保存即移除。</li>
+            <li>设置完可以直接关掉窗口；哪天想改账号或换 Wi-Fi，再打开它就回来了。</li>
             <li>「校园 Wi-Fi 名」填了以后，开机若是先连上了别的网络，会自动切回校园网；留空则只做认证、不切网。</li>
             <li>如果不想保存密码，取消「记住我」即可 —— 但这样开机就没法自动登录了。</li>
           </ul>
@@ -318,9 +318,10 @@
           <div class="card-head"><span class="card-title">它做了什么</span></div>
           <ul class="notes">
             <li>用你填的账号密码，走学校门户的认证接口登录，全程在后台完成。</li>
-            <li>每 3 分钟检查一次网络；掉线了自动重连，被切到别的 Wi-Fi 也会自己切回校园网。</li>
-            <li>开机后 3 分钟是「热身期」：立刻试第一次，之后每 5 秒一次，所以在刚开机那几十秒里连得比较积极。</li>
-            <li>开机自启的是<b>后台静默守护</b>，不是这个窗口 —— 这个窗口只在你手动打开时才出现。</li>
+            <li>只在开机时抢一次网：连上就收工，进程直接退出，不在后台常驻。</li>
+            <li>开机后 180 秒内每 5 秒试一轮（连 Wi-Fi + 探测 + 认证），所以刚开机那几十秒里连得比较积极；180 秒还没连上会弹框问你要不要再试一轮。</li>
+            <li>连上之后的掉线不再自动重连 —— 想连回来，打开一次本软件即可（它会在后台再抢一次）。</li>
+            <li>开机自启的是<b>后台抢网进程</b>，不是这个窗口 —— 这个窗口只在你手动打开时才出现。</li>
           </ul>
         </div>
       </div>
@@ -368,14 +369,14 @@
           <label class="switch-row">
             <span class="switch-text">
               <b>开机自动连接</b>
-              <em>只启动后台守护，本窗口不会随开机弹出</em>
+              <em>只启动后台抢网，本窗口不会随开机弹出</em>
             </span>
             <span class="switch"><input type="checkbox" id="p-autostart"><i></i></span>
           </label>
           <label class="switch-row">
             <span class="switch-text">
               <b>开机加速</b>
-              <em>登录瞬间就启动守护，会弹一次管理员授权窗</em>
+              <em>登录瞬间就启动抢网，会弹一次管理员授权窗</em>
             </span>
             <span class="switch"><input type="checkbox" id="p-fastboot"><i></i></span>
           </label>
@@ -404,7 +405,7 @@
       <span class="sb-item" id="sb-state">就绪</span>
     </div>
     <div class="sb-right">
-      <span class="sb-item" id="sb-watch">守护：未运行</span>
+      <span class="sb-item" id="sb-watch">开机自启：--</span>
       <span class="sb-sep"></span>
       <span class="sb-item" id="sb-time">--:--:--</span>
     </div>

@@ -68,6 +68,9 @@ class Runner:
         #: 上一轮结束时是不是通的。用来抓「离线 → 在线」这个转变点 ——
         #: 只在那一刻收拾系统弹的登录页，不必每轮都白扫一遍。
         self._was_online: Optional[bool] = None
+        #: 最近一次 :meth:`grab_online` 是不是被"退出"信号打断的。
+        #: 用它把「用户主动取消」和「超时没连上」分开 —— 只有后者才该去问用户。
+        self.interrupted: bool = False
 
     def _sleep(self, seconds: float) -> bool:
         """可被打断的等待。返回 True 表示收到了"退出"信号。"""
@@ -328,6 +331,24 @@ class Runner:
         except KeyboardInterrupt:
             self.log("收到中断，退出守护模式", "info")
             return
+
+    def grab_online(self, seconds: float = 180.0, gap: float = 5.0,
+                    on_event=None) -> bool:
+        """开机抢网：在 ``seconds`` 秒内反复尝试，**连上就收工**。
+
+        和 :meth:`watch` 的分工很清楚：``watch`` 是常驻守护 —— 连上之后还要
+        每 ``interval`` 分钟查一轮、掉线补登录；这里只管"把网弄通"这一件事，
+        连上就返回 ``True``，之后掉不掉线一概不管（掉线由调用方决定怎么处理）。
+
+        超时仍未连上返回 ``False``，让调用方决定是收工还是再问用户一次。
+
+        中途收到"退出"信号（界面里点了取消）会提前结束，此时
+        :attr:`interrupted` 为 ``True``，调用方据此区分「被叫停」和「没连上」。
+        """
+        self._was_online = False
+        # ``_warmup`` 的返回值就是"收到退出信号了吗"
+        self.interrupted = self._warmup(seconds, gap, on_event)
+        return bool(self._was_online)
 
     def _warmup(self, seconds: float, gap: float, on_event) -> bool:
         """开机后的集中抢网阶段：一直试到联网，或超过 ``seconds``。

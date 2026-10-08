@@ -107,8 +107,12 @@ function render() {
 
   // 状态栏
   const w = $('sb-watch');
-  w.textContent = '守护：' + (ST.watch_running ? '运行中' : '未运行');
-  w.className = 'sb-item ' + (ST.watch_running ? 'on' : 'off');
+  // 抢网进程连上就退出，所以平时读到的都是"没在跑"。这里显示的是
+  // 「开机会不会自动连」这个持久状态，只有正在抢网时才临时换成进行中。
+  w.textContent = ST.watch_running
+    ? '正在抢网…'
+    : '开机自启：' + (ST.autostart ? '已开启' : '未开启');
+  w.className = 'sb-item ' + ((ST.watch_running || ST.autostart) ? 'on' : 'off');
   $('sb-state').textContent = ST.status_text || '就绪';
 
   // 账号表单（未编辑时才回填，避免打断输入）
@@ -328,9 +332,9 @@ async function doSave() {
     $('panel-note').className = 'panel-note err';
   }
   if (r.ok && r.watch_started) {
-    toast('已保存 —— 后台守护已经跑起来了，现在就能关掉这个窗口', 'ok', 5600);
+    toast('已保存 —— 后台已经在抢网了，现在就能关掉这个窗口', 'ok', 5600);
   } else if (r.ok && r.watch_stopped) {
-    toast('已保存 —— 正在停止后台守护，开机也不会再自动登录了', 'ok', 5600);
+    toast('已保存 —— 已停止后台抢网，开机也不会再自动登录了', 'ok', 5600);
   } else {
     toast(r.message || (r.ok ? '保存成功' : '保存失败'), r.ok ? 'ok' : 'err', 4200);
   }
